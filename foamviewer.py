@@ -3,12 +3,38 @@
 import os
 from matplotlib import pyplot
 import tkinter as TK
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg#, NavigationToolbar2TkAgg
 from tkinter import filedialog
 from xlwt import Workbook
 import numpy
 from tkinter import ttk
+from threading import Timer
+import copy
 
+class RepeatedTimer(object):
+    def __init__(self, interval, function, *args, **kwargs):
+        self._timer     = None
+        self.interval   = interval
+        self.function   = function
+        self.args       = args
+        self.kwargs     = kwargs
+        self.is_running = False
+        self.start()
+
+    def _run(self):
+        self.is_running = False
+        self.start()
+        self.function(*self.args, **self.kwargs)
+
+    def start(self):
+        if not self.is_running:
+            self._timer = Timer(self.interval, self._run)
+            self._timer.start()
+            self.is_running = True
+
+    def stop(self):
+        self._timer.cancel()
+        self.is_running = False
 
 
 class ARUPFOAM_Monitor(object):
@@ -42,6 +68,9 @@ class ARUPFOAM_Monitor(object):
         self.fig_pro.patch.set_facecolor('xkcd:charcoal')
         self.ax_pro  = self.fig_pro.add_subplot(111)
         
+        self.frame3 = TK.Frame(self.root, width=2000, height=2000, bg=self.bg_color)
+        self.frame3.place(x=0,y=40)
+        
         try:
             self.ax_avg.cla()
             self.ax_res.cla()
@@ -50,13 +79,13 @@ class ARUPFOAM_Monitor(object):
         
         try:
             self.get_probes()
+            self.plot_probes()
             
-            self.NoProbesLabel = TK.Label(self.frame3, text='Probes found but plotted in next version :)', bg=self.bg_color, fg=self.text_color)
-            self.NoProbesLabel.place(x=350, y=200)
+            #self.NoProbesLabel = TK.Label(self.frame3, text='Probes found but plotted in next version :)', bg=self.bg_color, fg=self.text_color)
+            #self.NoProbesLabel.place(x=350, y=200)
         except:
             
-            self.frame3 = TK.Frame(self.root, width=2000, height=2000, bg=self.bg_color)
-            self.frame3.place(x=0,y=40)
+            
                         
             self.NoProbesLabel = TK.Label(self.frame3, text='No Probes Found!', bg=self.bg_color, fg=self.text_color)
             self.NoProbesLabel.place(x=350, y=200)
@@ -89,19 +118,81 @@ class ARUPFOAM_Monitor(object):
             for i, char in enumerate(prob):
                 if char=='(':
                     break
-            probe = str(prob[i+1:]).replace(' ', ',').split(',')
+            probe = str(prob[i+1:])#.replace(' ', ',').split(',')
             
-            self.probe_labels.append(str(probe[-1][2:]))
-            if self.probe_labels[-1]=='':
-                self.probe_labels[-1] = str(probe[1:4])
+            for char_number, char in enumerate(probe):
+                if char==')':
+                    label_begin = char_number
+                    true_label  = False
+                if char=='/' and probe[char_number+1]=='/':
+                    label_begin = char_number+2
+                    true_label  = True
+                    break
+            
+            if true_label:
+                self.probe_labels.append(str(probe[label_begin:]))
+            else:
+                self.probe_labels.append(str(probe[0:label_begin]))
                 
             self.probe_number.append(o)
             self.probe_values.append([])
         self.probe_values.append([])
-                        
-        #print (self.probe_labels)
-        #print (self.probe_number)
+        
+        dic_temp = []
+        for y in os.listdir(self.path + '/probes'):
+            dic_temp.append(int(y))
+        
+        dic = numpy.max(dic_temp)
+        
+        self.check_which_probe_active()
+        
+        no = []
+        for h in os.listdir(self.path + '/probes/' + str(dic)):
+            if self.active_probe in h:
+                for q, sign in enumerate(h):
+                    if '_' in sign:
+                        no.append(int(h[q+1]))
+        
+        if len(no)==1:
+            pass
+        if len(no)>1:
+            no = numpy.max(no)
+
+        if len(no)==0:
+            string = r'/surfaceFieldValue.dat' 
+            #string = r'/faceSource.dat'  
+        else:
+            string = r'/surfaceFieldValue_' + str(no)[1] + r'.dat'                    
                 
+        ### Getting results ###     
+        if len(dic_temp)>1:
+            with open(self.path + '/' + self.ResultList[i] + '/' + str(dic_temp[0]) + string, 'r') as infile:
+                lines = infile.readlines()
+            
+            for z in range(len(dic_temp)-1):
+                with open(self.path + '/' + self.ResultList[i] + '/' + str(dic_temp[z+1]) + string, 'r') as infile:
+                    lines_append = infile.readlines()
+    
+                for l in range(5,len(lines_append)):
+                    lines.append(lines_append[l])
+                    
+    def check_wich_probe_active(self):
+        
+        self.active_probe = 'T'
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
         dic = []
         for y in os.listdir(self.path + '/probes'):
@@ -142,7 +233,52 @@ class ARUPFOAM_Monitor(object):
                     probe_no += 1
                 else:
                     pass
-                    
+                
+    def plot_probes(self):
+        
+        try:
+            for i in range(len(self.ax_pro.lines)):
+                self.ax_pro.lines.pop(0)
+        except:
+            pass
+        '''Plot Results'''
+        
+        
+        
+        
+        for i in range(len(self.probes_values)):
+            self.ax_pro.plot(self.residual_iteration, self.probe_values[i], label=self.probe_labels[i])
+            
+        
+        self.ax_pro.grid(True)
+        self.ax_pro.legend(loc=1, fontsize=8, ncol=2)#, bbox_to_anchor=(float(self.xpos_legend.get()),float(self.ypos_legend.get())), ncol=int(self.ncols.get()), fontsize=float(self.legendsize.get()))
+        self.ax_pro.set_ylabel('Value')
+        self.ax_pro.set_xlabel('Iteration')
+        self.ax_pro.set_facecolor('xkcd:charcoal')
+        
+        self.ax_pro.tick_params(axis='x', colors='white')
+        self.ax_pro.tick_params(axis='y', colors='white')
+        self.ax_pro.yaxis.label.set_color('white')
+        self.ax_pro.xaxis.label.set_color('white')
+        self.ax_pro.grid(True, linestyle=':')
+        self.ax_pro.set_yscale('log')
+               
+        self.canvas = FigureCanvasTkAgg(self.fig_pro, self.root)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().place(x=self.x0-100+40,y=self.y0+70)
+        
+        self.frame3 = TK.Frame(self.root, width=2000, height=150, bg=self.bg_color)
+        self.frame3.place(x=0,y=40)
+        self.frame3.bind("<Button-1>", self.refresh_chart_residuals)
+        
+        self.infolabel2 = TK.Label(self.root, text='CASE:    '  + self.path, bg=self.bg_color, fg=self.text_color)
+        self.infolabel2.place(x=self.x0+100, y=self.y0+80)
+        self.infolabel2.bind("<Button-1>", self.refresh_chart_residuals)
+        
+        self.infolabel = TK.Label(self.root, text='FILE:       ' + self.filepath, bg=self.bg_color, fg=self.text_color)
+        self.infolabel.place(x=self.x0+100, y=self.y0+100)
+        self.infolabel.bind("<Button-1>", self.refresh_chart_residuals)
+        
        
         
         
@@ -164,12 +300,17 @@ class ARUPFOAM_Monitor(object):
         
         
         self.get_residuals()
-        #self.plot_residuals()
+        self.plot_residuals()
+        
+        #self.timer_residuals = RepeatedTimer(5.0, self.refresh_chart_residuals, 'required')
+        #self.timer_residuals.start()
+        
+        
         
     
                         
     def get_residuals(self):
-        #threading.Timer(5.0, self.get_residuals).start()
+        
         
         dic_temp = []
         for y in os.listdir(self.path + '/residuals'):
@@ -179,19 +320,27 @@ class ARUPFOAM_Monitor(object):
         
         no = []
         for h in os.listdir(self.path + '/residuals' + '/' + str(dic)):
+            file = h
             for q, sign in enumerate(h):
                 if '_' in sign:
                     no.append(int(h[q+1]))
         
+        filename = ''
+        for char in file:
+            if char=='_' or char=='.':
+                break
+            filename += char
+                   
         if len(no)==1:
             pass
         if len(no)>1:
             no = numpy.max(no)
 
+
         if len(no)==0:
-            string = r'/residuals.dat' 
+            string = r'/' + filename + '.dat' 
         else:
-            string = r'/residuals_' + str(no)[1] + r'.dat'   
+            string = r'/' + filename + '_' + str(no)[1] + r'.dat'   
             
         if len(dic_temp)>1:
             with open(self.path + '/residuals/' + str(dic_temp[0]) + '/' + string, 'r') as infile:
@@ -210,46 +359,87 @@ class ARUPFOAM_Monitor(object):
         self.filepath = str(dic)+string
         self.residual_labels  = []
         k                     = 10
-        while k<(len(lines[1])):   
-            ind1 = False
-            ind2 = True
-            k += 1
-            for i in range (k, len(lines[1])):
-                if not lines[1][i]==' ' and ind2==True:
-                    begin = i+1
-                    ind1 = True
-                    ind2 = False
-                if lines[1][i]==' ' and ind1==True:
-                    end = i
-                    self.residual_labels.append(str(lines[1][begin:end]))
-                    k   = i
-                    break
         
+        if filename=='residuals':
+            while k<(len(lines[1])):   
+                ind1 = False
+                ind2 = True
+                k += 1
+                for i in range (k, len(lines[1])):
+                    if not lines[1][i]==' ' and ind2==True:
+                        begin = i+1
+                        ind1 = True
+                        ind2 = False
+                    if lines[1][i]==' ' and ind1==True:
+                        end = i
+                        self.residual_labels.append(str(lines[1][begin:end]))
+                        k   = i
+                        break
+        if filename=='solverInfo':
+            self.solverInfo_spots = []
+            while k<(len(lines[1])):   
+                ind1 = False
+                ind2 = True
+                k += 1
+                for i in range (k, len(lines[1])):
+                    if not lines[1][i]==' ' and ind2==True:
+                        begin = i+1
+                        ind1 = True
+                        ind2 = False
+                    if lines[1][i]==' ' and ind1==True:
+                        end = i
+                        self.residual_labels.append(str(lines[1][begin:end]))
+                        k   = i
+                        break
+                    
+            labels = copy.deepcopy(self.residual_labels)
+            for q, label in enumerate(labels):        
+                if 'initial' in label:
+                    self.solverInfo_spots.append(q+1)
+                else:
+                    self.residual_labels.remove(label)
+            
+            for x, label in enumerate(self.residual_labels):
+                for p, char in enumerate(label):
+                    if char=='_':
+                        break
+                self.residual_labels[x] = label[0:p]
+            
+                    
+       
         self.residual_values = []
         for i in range(len(self.residual_labels)):
             self.residual_values.append([])
         self.residual_iteration = []
             
-        for result_no in range(2,len(lines)):
-            k           = 5
-            result_type = 0
-            self.residual_iteration.append(int(result_no-1))
-            while k<(len(lines[result_no])): 
-                ind2         = True
-                ind1         = False
-                k           += 1 
-                for i in range (k, len(lines[result_no])):
-                    if not lines[result_no][i]==' ' and ind2==True:
-                        begin = i+1
-                        ind2 = False
-                        ind1 = True
-                    if lines[result_no][i]=='e' and ind1==True:
-                        end = i+4
-                        self.residual_values[result_type].append(float(lines[result_no][begin:end]))
-                        result_type += 1
-                        k   = i+3
-                        break
-        self.plot_residuals()
+        if filename=='residuals':
+            for result_no in range(2,len(lines)):
+                k           = 5
+                result_type = 0
+                self.residual_iteration.append(int(result_no-1))
+                while k<(len(lines[result_no])): 
+                    ind2         = True
+                    ind1         = False
+                    k           += 1 
+                    for i in range (k, len(lines[result_no])):
+                        if not lines[result_no][i]==' ' and ind2==True:
+                            begin = i+1
+                            ind2 = False
+                            ind1 = True
+                        if lines[result_no][i]=='e' and ind1==True:
+                            end = i+4
+                            self.residual_values[result_type].append(float(lines[result_no][begin:end]))
+                            result_type += 1
+                            k   = i+3
+                            break
+        if filename=='solverInfo':
+            for result_no in range(2,len(lines)):
+               
+                self.residual_iteration.append(int(result_no-1))
+                line = lines[result_no].split('\t')
+                    
+                for number, spot in enumerate(self.solverInfo_spots):
+                    self.residual_values[number].append(float(line[spot]))
         
     def plot_residuals(self):
         
@@ -260,6 +450,7 @@ class ARUPFOAM_Monitor(object):
             pass
         '''Plot Results'''
         
+        pyplot.close()
         
         
         for i in range(len(self.residual_values)):
@@ -302,7 +493,7 @@ class ARUPFOAM_Monitor(object):
         
         for i in range(len(self.ax_res.lines)):
             self.ax_res.lines.pop(0)
-        self.infolabel2.destroy()
+        #self.infolabel2.destroy()
             
         self.get_residuals()
         self.plot_residuals()
@@ -311,7 +502,7 @@ class ARUPFOAM_Monitor(object):
     
     
     def show_patches(self): 
-        
+         
                       
         self.frame = TK.Frame(self.root, width=2000, height=2000, bg=self.bg_color)
         self.frame.place(x=0,y=0)
@@ -366,12 +557,14 @@ class ARUPFOAM_Monitor(object):
         
         self.button_cut_outlets = TK.Button(self.frame, text='Cut Outlets', command=self.switch_cut_outlets, width=10, height=1, bg=self.btn_color, fg=self.text_color)
         self.button_cut_outlets.place(x=self.x0+394, y=self.y0-35)
+        
         if self.cut_outlets == True:
             self.button_cut_outlets.config(bg='green', text='Plot Outlets')
         
         if hasattr(self, 'residual_labels') or hasattr(self, 'probe_labels'):
             self.refresh_chart_patches('required')
             self.frame.bind("<Button-1>", self.refresh_chart_patches)
+            #self.timer_residuals.stop()
       
     def switch_patch(self, button):
         
@@ -519,6 +712,7 @@ class ARUPFOAM_Monitor(object):
 
         if len(no)==0:
             string = r'/surfaceFieldValue.dat' 
+            #string = r'/faceSource.dat'  
         else:
             string = r'/surfaceFieldValue_' + str(no)[1] + r'.dat'                    
                 
