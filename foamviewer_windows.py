@@ -333,7 +333,7 @@ class ARUPFOAM_Monitor(object):
             
         
         self.ax_pro.grid(True)
-        self.ax_pro.legend(loc=1, fontsize=8, ncol=2)#, bbox_to_anchor=(float(self.xpos_legend.get()),float(self.ypos_legend.get())), ncol=int(self.ncols.get()), fontsize=float(self.legendsize.get()))
+        self.ax_pro.legend(loc='best', fontsize=6, ncol=2)#, bbox_to_anchor=(float(self.xpos_legend.get()),float(self.ypos_legend.get())), ncol=int(self.ncols.get()), fontsize=float(self.legendsize.get()))
         #self.ax_pro.set_ylabel('Value')
         self.ax_pro.set_xlabel('Iteration')
         self.ax_pro.set_facecolor('xkcd:charcoal')
@@ -870,7 +870,7 @@ class ARUPFOAM_Monitor(object):
                     string = r'/surfaceFieldValue_' + str(no[0]) + r'.dat' 
                 except:
                     string = r'/surfaceFieldValue_' + str(no) + r'.dat' 
-                
+            
             dicstrings.append(string)
                   
                   
@@ -907,7 +907,7 @@ class ARUPFOAM_Monitor(object):
             lines[k] = lines[k].split('\t')  
             self.times.append(int(lines[k][0]))
         
-        #self.times = []
+        self.times = []
         for j in range(len(self.ResultList)):
             x = self.ResultList[j]
             do = True
@@ -915,9 +915,9 @@ class ARUPFOAM_Monitor(object):
                 if not 'txt' in x:
                     do = self.check_outlet_strings(x)
                     if do==True:                                          
-                        self.AVG_Curves_T.append([])
+                        #self.AVG_Curves_T.append([])
                         #self.times.append([])
-                        self.AVG_Labels.append(x)
+                        #self.AVG_Labels.append(x)
                         
                         if len(dic_temp)>1:
                             with open(self.path + '/' + x + '/' + str(dic_temp[0]) + dicstrings[0], 'r') as infile:
@@ -932,26 +932,34 @@ class ARUPFOAM_Monitor(object):
                             with open(self.path + '/' + x + '/' + str(dic) + dicstrings[0], 'r') as curve:
                                 lines = curve.readlines()  
                                 
-                        offset, ind_U = self.read_resultType(lines[4])
-                        
-                        for k in range(5,len(lines)): 
-                            lines[k] = lines[k].split('\t') 
-                            #self.times[-1].append(int(lines[k][0]))
-                            if self.result_string=='U':
-                                line  = lines[k][self.resultType][1:-1].replace(' ', ',').split(',')      
+                    
+                        if len(lines)==0:
+                            pass
+                        else:
+                            self.AVG_Curves_T.append([])
+                            self.times.append([])
+                            self.AVG_Labels.append(x)
+                            offset, ind_U = self.read_resultType(lines[4])
                             
-                                if ind_U==1:
-                                    value = float(line[0])
-                                elif ind_U==2:
-                                    value = float(line[1])
-                                elif ind_U==3:
-                                    value = float(line[2])
+                            for k in range(5,len(lines)): 
+                                lines[k] = lines[k].split('\t') 
+                                self.times[-1].append(int(lines[k][0]))
+                                if self.result_string=='U':
+                                    line  = lines[k][self.resultType][1:-1].replace(' ', ',').split(',')      
+                                
+                                    if ind_U==1:
+                                        value = float(line[0])
+                                    elif ind_U==2:
+                                        value = float(line[1])
+                                    elif ind_U==3:
+                                        value = float(line[2])
+                                    else:
+                                        value = numpy.sqrt(float(line[0])**2+float(line[1])**2+float(line[2])**2) 
+                                   
+                                    self.AVG_Curves_T[-1].append(value)
+                                    
                                 else:
-                                    value = numpy.sqrt(float(line[0])**2+float(line[1])**2+float(line[2])**2) 
-                               
-                                self.AVG_Curves_T[-1].append(value)
-                            else:
-                                self.AVG_Curves_T[-1].append(float(lines[k][self.resultType])-offset)
+                                    self.AVG_Curves_T[-1].append(float(lines[k][self.resultType])-offset)
                     else:
                         pass
               
@@ -979,9 +987,9 @@ class ARUPFOAM_Monitor(object):
         sheet1 = self.xslx.add_sheet('AVG')
         sheet2 = self.xslx.add_sheet('MAX')
         
-        which_time = self.times[self.selecttime.current()]
-        for p in range(len(self.times)):
-            if self.times[p]==which_time:
+        which_time = self.times[-1][self.selecttime.current()]
+        for p in range(len(self.times[-1])):
+            if self.times[-1][p]==which_time:
                 break
         print (which_time)
         for i in range(len(self.AVG_Curves_T)):
@@ -991,9 +999,9 @@ class ARUPFOAM_Monitor(object):
             sheet2.write(i,0,str(self.MAX_Labels[i]))
             sheet2.write(i,1,str(self.MAX_Curves_T[i][p]).replace('.',',')) 
         
-        if self.resultType == 1:
+        if self.result_string == 'T':
             self.xslx.save(self.path + '\FieldValues_temp.xls')
-        if self.resultType == -1:
+        if self.result_string == 'p_rgh':
             self.xslx.save(self.path + '\FieldValues_press.xls')
         
     def plot_results_avg(self):
@@ -1002,18 +1010,16 @@ class ARUPFOAM_Monitor(object):
         
         maximum = []
         minimum = []
-        #max_time = []
+        max_time = []
         
         for i in range(len(self.AVG_Curves_T)):
-            
-            if not len(self.times)==len(self.AVG_Curves_T[i]):
-                warning = TK.Label(self.root, text='Please check writeInterval for all patches! WriteInterval must be same for every output.', bg=self.bg_color, fg=self.text_color)
-                warning.place(x=self.x0+100, y=self.y0+280)
-                
-            self.ax_avg.plot(self.times, self.AVG_Curves_T[i], label=self.AVG_Labels[i])
+                           
+            self.ax_avg.plot(self.times[i], self.AVG_Curves_T[i], label=self.AVG_Labels[i])
             maximum.append(numpy.max(self.AVG_Curves_T[i]))
             minimum.append(numpy.min(self.AVG_Curves_T[i]))
-            #max_time.append(numpy.max(self.times[i]))
+            max_time.append(numpy.max(self.times[i]))
+            
+        max_time = numpy.max(max_time)
             
             
             
@@ -1023,19 +1029,19 @@ class ARUPFOAM_Monitor(object):
             self.ax_avg.legend(loc='best')
         if self.result_string=='T':
             self.ax_avg.set_ylabel('Temperature in C')
-            self.ax_avg.axis([0,self.times[-1], int(numpy.min(minimum)-2), int(numpy.max(maximum)+2)])
+            self.ax_avg.axis([0,max_time, int(numpy.min(minimum)-2), int(numpy.max(maximum)+2)])
         if self.result_string=='p_rgh':
             self.ax_avg.set_ylabel('Pressure in Pa')
-            self.ax_avg.axis([0,self.times[-1], -100, 0])
+            self.ax_avg.axis([0,max_time, -100, 0])
         if self.result_string=='U':
             self.ax_avg.set_ylabel('Velocity m/s')
-            self.ax_avg.axis([0,self.times[-1], 0, int(numpy.max(maximum)+2)])
+            self.ax_avg.axis([0,max_time, 0, int(numpy.max(maximum)+2)])
         if self.result_string=='k':
             self.ax_avg.set_ylabel('k')
-            self.ax_avg.axis([0,self.times[-1], 0, int(numpy.max(maximum)+2)])
+            self.ax_avg.axis([0,max_time, 0, int(numpy.max(maximum)+2)])
         if self.result_string=='omega':
             self.ax_avg.set_ylabel('omega')
-            self.ax_avg.axis([0,self.times[-1], 0, int(numpy.max(maximum)+2)])
+            self.ax_avg.axis([0,max_time, 0, int(numpy.max(maximum)+2)])
         
         
         self.ax_avg.set_xlabel('Iteration')
@@ -1068,7 +1074,7 @@ class ARUPFOAM_Monitor(object):
         
         var1 = (TK.StringVar(self.root)).get()
         self.selecttime = ttk.Combobox(self.root, width=5, textvariable=var1)
-        self.selecttime['values'] = self.times
+        self.selecttime['values'] = self.times[-1]
         self.selecttime.place(x=self.x0+30, y=self.y0+70)
         self.selecttime.current(len(self.times)-1)
         TK.Label(self.root, text='Time:', bg=self.bg_color, fg=self.text_color).place(x=self.x0-2, y=self.y0+70)
