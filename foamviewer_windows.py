@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 import os
@@ -46,6 +47,7 @@ class ARUPFOAM_Monitor(object):
         
         self.cut_inelets = False
         self.cut_outlets = False
+        self.show_legend = False
         
         self.bg_color     = '#343837'
         self.text_color   = 'snow'
@@ -53,9 +55,11 @@ class ARUPFOAM_Monitor(object):
         self.btn_color2   = 'gray10'
         self.root         = TK.Tk()
         self.root.geometry('890x750')
-        self.root.title('ARUPFOAM Simulation Monitor')
+        self.root.title('FOAMViewer v1712 & v1906')
         
         self.show_patches()
+        
+        
     
     
     def show_probes(self):
@@ -72,20 +76,61 @@ class ARUPFOAM_Monitor(object):
         self.frame3.place(x=0,y=40)
         self.frame.bind("<Button-1>", self.refresh_chart_probes)
         
+        self.button_temperature = TK.Button(self.frame3, text='T', width=2 , height=1, bg=self.btn_color, fg=self.text_color, state='disabled') 
+        self.button_temperature.place(x=self.x0+480, y=self.y0-50)
+        self.button_temperature.config(command=lambda button=self.button_temperature: self.switch_probes(button))
+        
+        self.button_pressure = TK.Button(self.frame3, text='p', width=2, height=1, bg=self.btn_color, fg=self.text_color, state='normal')
+        self.button_pressure.config(command=lambda button=self.button_pressure: self.switch_probes(button))
+        self.button_pressure.place(x=self.x0+505, y=self.y0-50)
+        
+        self.button_k = TK.Button(self.frame3, text='k', width=2, height=1, bg=self.btn_color, fg=self.text_color, state='normal')
+        self.button_k.config(command=lambda button=self.button_k: self.switch_probes(button))
+        self.button_k.place(x=self.x0+530, y=self.y0-50)
+        
+        self.button_omega = TK.Button(self.frame3, text='omega', width=9, height=1, bg=self.btn_color, fg=self.text_color, state='normal')
+        self.button_omega.config(command=lambda button=self.button_omega: self.switch_probes(button))
+        self.button_omega.place(x=self.x0+557, y=self.y0-50)
+        
+        self.button_Ux = TK.Button(self.frame3, text='Ux', width=2, height=1, bg=self.btn_color, fg=self.text_color, state='normal') 
+        self.button_Ux.config(command=lambda button=self.button_Ux: self.switch_probes(button))
+        self.button_Ux.place(x=self.x0+480, y=self.y0-24)
+        
+        self.button_Uy = TK.Button(self.frame3, text='Uy', width=2, height=1, bg=self.btn_color, fg=self.text_color, state='normal') 
+        self.button_Uy.config(command=lambda button=self.button_Uy: self.switch_probes(button))
+        self.button_Uy.place(x=self.x0+505, y=self.y0-24)
+        
+        self.button_Uz = TK.Button(self.frame3, text='Uz', width=2, height=1, bg=self.btn_color, fg=self.text_color, state='normal') 
+        self.button_Uz.config(command=lambda button=self.button_Uz: self.switch_probes(button))
+        self.button_Uz.place(x=self.x0+530, y=self.y0-24)
+        
+        self.button_UMag = TK.Button(self.frame3, text='U Magnitude', width=9, height=1, bg=self.btn_color, fg=self.text_color, state='normal') 
+        self.button_UMag.config(command=lambda button=self.button_UMag: self.switch_probes(button))
+        self.button_UMag.place(x=self.x0+557, y=self.y0-24)
+        
+        self.probe_buttons= [self.button_temperature, self.button_pressure, self.button_k, self.button_omega, self.button_Ux, self.button_Uy, self.button_Uz, self.button_UMag]
+        
+        
         try:
             self.ax_avg.cla()
             self.ax_res.cla()
         except:
             pass
         
-        try:
-           self.get_probes()
-           self.plot_probes()
-        except:
-            self.NoProbesLabel = TK.Label(self.frame3, text='No Probes Found!', bg=self.bg_color, fg=self.text_color)
-            self.NoProbesLabel.place(x=350, y=200)
+        #try:
+        self.get_probes()
+        self.plot_probes()
+        #except:
+        #    self.NoProbesLabel = TK.Label(self.frame3, text='No Probes Found!', bg=self.bg_color, fg=self.text_color)
+        #    self.NoProbesLabel.place(x=350, y=200)
         
+    def switch_probes(self, button):
         
+        for activate_button in self.probe_buttons:
+            activate_button.config(state='normal')
+        button.config(state='disabled')
+        self.refresh_chart_probes('required')
+    
     def get_probes(self):
         
         probes = []
@@ -134,63 +179,121 @@ class ARUPFOAM_Monitor(object):
         
         dic_temp = []
         for y in os.listdir(self.path + '/probes'):
-            dic_temp.append(int(y))
+            dic_temp.append(int(y))                                 ### Read out every timestep folder
         
-        dic = numpy.max(dic_temp)
-        
-        self.check_which_probe_active()
-        
-        no = []
-        for h in os.listdir(self.path + '/probes/' + str(dic)):
-            if self.active_probe in h:
-                for q, sign in enumerate(h):
-                    if '_' in sign:
-                        no.append(int(h[q+1]))
-        
-        if len(no)==1:
-            pass
-        if len(no)>1:
-            no = numpy.max(no)
-
-        if len(no)==0:
-            string = r'/' + self.active_probe 
-            #string = r'/faceSource.dat'  
-        else:
-            string = r'/'+ self.active_probe + '_' + str(no)[1]
+        dic = numpy.max(dic_temp)  # Get max timestep
+        dic_temp.sort(key=int)     # Sort the folders
                 
-        ### Getting results ###     
+        self.check_which_probe_active()        
+        string = r'/' + self.active_probe 
+       
         if len(dic_temp)>1:
-            with open(self.path + '/probes/' + str(dic_temp[0]) + string, 'r') as infile:
-                lines = infile.readlines()
+            dic_temp.sort(key=int)
+            try:
+                with open(self.path + '/probes/' + str(dic_temp[0]) + string, 'r') as infile:
+                    lines = infile.readlines()
+            except:
+                with open(self.path + '/probes/' + str(dic_temp[1]) + string, 'r') as infile:
+                    lines = infile.readlines()
+                
             
             for z in range(len(dic_temp)-1):
-                with open(self.path + '/probes/' + str(dic_temp[z+1]) + string, 'r') as infile:
-                    lines_append = infile.readlines()
+                try:
+                    with open(self.path + '/probes/' + str(dic_temp[z+1]) + string, 'r') as infile:
+                        lines_append = infile.readlines()
     
-                for l in range(5,len(lines_append)):
-                    lines.append(lines_append[l])
+                    for l in range(len(self.probe_labels)+3,len(lines_append)):
+                        lines.append(lines_append[l])
+                except:
+                    pass
                     
         else:
             with open(self.path + '/probes/' + str(dic) + string, 'r') as curve:
                 lines = curve.readlines()
-        self.times = []       
-        for k in range(len(self.probe_labels)+2,len(lines)):    
-            lines[k] = lines[k].replace(' ', ',').split(',')
-            real_line = []
-            for number in lines[k]:
-                if not number=='':
-                    real_line.append(number)
-            self.times.append(int(real_line[0]))
-            for j in range(len(self.probe_labels)):
-                self.probe_values[j].append(float(real_line[j+1])-273.15)
+
+        self.times = []  
+        
+        if self.active_probe=='U':
+            for k in range(len(self.probe_labels)+2,len(lines)):    
+                line = lines[k].split('(')
+                self.times.append(int(line[0]))
+            
+                for j in range(len(self.probe_labels)):
+                    line2  = line[j+1].split(')')
+                    vektor = line2[0].split(' ')
+                    if str(self.button_UMag['state'])=='disabled':
+                        value = numpy.sqrt(float(vektor[0])**2+float(vektor[1])**2+float(vektor[2])**2)
+                    if str(self.button_Ux['state'])=='disabled':
+                        value = float(vektor[0])
+                    if str(self.button_Uy['state'])=='disabled':
+                        value = float(vektor[1])
+                    if str(self.button_Uz['state'])=='disabled':
+                        value = float(vektor[2])                
+                    self.probe_values[j].append(value) 
+        
+        
+        else:
+            for k in range(len(self.probe_labels)+2,len(lines)):    
+                lines[k] = lines[k].replace(' ', ',').split(',')
+                real_line = []
+                for number in lines[k]:
+                    if not number=='':
+                        real_line.append(number)
+               
+                self.times.append(int(real_line[0]))
+                for j in range(len(self.probe_labels)):
+                    if self.active_probe=='T':
+                        self.probe_values[j].append(float(real_line[j+1])-273.15)         
+                    else:
+                        self.probe_values[j].append(float(real_line[j+1]))
+                        
                 
-        
-        
-           
                 
     def check_which_probe_active(self):
         
-        self.active_probe = r'T'
+        if str(self.button_temperature['state'])=='disabled':
+            self.active_probe = 'T'
+        if str(self.button_pressure['state'])=='disabled':
+            self.active_probe = 'p_rgh'
+        if str(self.button_k['state'])=='disabled':
+            self.active_probe = 'k'
+        if str(self.button_omega['state'])=='disabled':
+            self.active_probe = 'omega'
+        if str(self.button_UMag['state'])=='disabled':
+            self.active_probe = 'U'
+        if str(self.button_Ux['state'])=='disabled':
+            self.active_probe = 'U'
+        if str(self.button_Uy['state'])=='disabled':
+            self.active_probe = 'U'
+        if str(self.button_Uz['state'])=='disabled':
+            self.active_probe = 'U'
+        
+    def check_added_equations(self):
+        
+        for char in range(1,len(self.path)):
+            if self.path[-char]=='/':
+                temp_path = self.path[0:-char]
+                break
+        
+        with open(temp_path + '/system/controlDict', 'r') as infile:
+            lines = infile.readlines()
+            
+        equations = []
+        ind_find  = True
+        for i, line in enumerate(lines):
+            if '/*' in line:
+                ind_find = False
+            if '*/' in line:
+                ind_find = True
+            if ind_find==True:
+                if 'scalarTransport' in line:
+                    for subline in lines[i:]:
+                        if 'field' in subline:
+                            subline = subline.replace(' ', ',').split(',')
+                            equations.append(subline[-1][0:-2])
+                            break  
+                        
+        return equations
                 
     def plot_probes(self):
         
@@ -212,17 +315,26 @@ class ARUPFOAM_Monitor(object):
             maximum.append(numpy.max(self.probe_values[i]))
             minimum.append(numpy.min(self.probe_values[i]))
                 
-                   
-               
-       
         if self.active_probe=='T':
             self.ax_pro.set_ylabel('Temperature in C')
             self.ax_pro.axis([0,self.times[-1], int(numpy.min(minimum)-2), int(numpy.max(maximum)+2)])    
+        if self.active_probe=='p_rgh':
+            self.ax_pro.set_ylabel('Pressure in Pa')
+            self.ax_pro.axis([0,self.times[-1], int(numpy.min(minimum)-2), int(numpy.max(maximum)+2)])
+        if self.active_probe=='k':
+            self.ax_pro.set_ylabel('k')
+            self.ax_pro.axis([0,self.times[-1], int(numpy.min(minimum)-2), int(numpy.max(maximum)+2)])
+        if self.active_probe=='omega':
+            self.ax_pro.set_ylabel('omega')
+            self.ax_pro.axis([0,self.times[-1], int(numpy.min(minimum)-2), int(numpy.max(maximum)+2)])
+        if self.active_probe=='U':
+            self.ax_pro.set_ylabel('Velocity in m/s')
+            self.ax_pro.axis([0,self.times[-1], int(numpy.min(minimum)-2), int(numpy.max(maximum)+2)])
             
         
         self.ax_pro.grid(True)
         self.ax_pro.legend(loc=1, fontsize=8, ncol=2)#, bbox_to_anchor=(float(self.xpos_legend.get()),float(self.ypos_legend.get())), ncol=int(self.ncols.get()), fontsize=float(self.legendsize.get()))
-        self.ax_pro.set_ylabel('Value')
+        #self.ax_pro.set_ylabel('Value')
         self.ax_pro.set_xlabel('Iteration')
         self.ax_pro.set_facecolor('xkcd:charcoal')
         
@@ -236,10 +348,6 @@ class ARUPFOAM_Monitor(object):
         self.canvas = FigureCanvasTkAgg(self.fig_pro, self.root)
         self.canvas.draw()
         self.canvas.get_tk_widget().place(x=self.x0-100+40,y=self.y0+70)
-        
-        self.frame3 = TK.Frame(self.root, width=2000, height=150, bg=self.bg_color)
-        self.frame3.place(x=0,y=40)
-        self.frame3.bind("<Button-1>", self.refresh_chart_probes)
         
         self.infolabel2 = TK.Label(self.root, text='CASE:    '  + self.path, bg=self.bg_color, fg=self.text_color)
         self.infolabel2.place(x=self.x0+100, y=self.y0+80)
@@ -293,44 +401,55 @@ class ARUPFOAM_Monitor(object):
         for y in os.listdir(self.path + '/residuals'):
             dic_temp.append(int(y))
             
-        dic = numpy.max(dic_temp)
+        dic = numpy.max(dic_temp)  # Get max timestep
+        dic_temp.sort(key=int)     # Sort the folders
         
-        no = []
-        for h in os.listdir(self.path + '/residuals' + '/' + str(dic)):
-            file = h
-            for q, sign in enumerate(h):
-                if '_' in sign:
-                    no.append(int(h[q+1]))
-        
+        dicstrings = [] 
+        for dic in dic_temp:
+            no = []
+            ind_ende = False
+            for h in os.listdir(self.path + '/residuals' + '/' + str(dic)):
+                file = h
+                for q, sign in enumerate(h):
+                    if '_' in sign:
+                        start = q+1
+                        ind_ende = True
+                    if '.' in sign and ind_ende==True:
+                        ende  = q
+                        no.append(int(h[start:ende]))            
+            
+            if len(no)>1:
+                no = numpy.max(no)
+    
+            if len(no)==0:
+                string = r'/residuals.dat' 
+               
+            else:
+                try:
+                    string = r'/residuals_' + str(no[0]) + r'.dat' 
+                except:
+                    string = r'/residuals_' + str(no) + r'.dat' 
+            dicstrings.append(string)
         filename = ''
         for char in file:
             if char=='_' or char=='.':
                 break
             filename += char
-                   
-        if len(no)==1:
-            pass
-        if len(no)>1:
-            no = numpy.max(no)
 
-
-        if len(no)==0:
-            string = r'/' + filename + '.dat' 
-        else:
-            string = r'/' + filename + '_' + str(no)[1] + r'.dat'   
-            
+        
         if len(dic_temp)>1:
-            with open(self.path + '/residuals/' + str(dic_temp[0]) + '/' + string, 'r') as infile:
+            dic_temp.sort(key=int)
+            with open(self.path + '/residuals/' + str(dic_temp[0]) + '/' + dicstrings[0], 'r') as infile:
                 lines = infile.readlines()
                 
             for z in range(len(dic_temp)-1):   
-                with open(self.path + '/residuals/' + str(dic_temp[z+1]) + '/' + string, 'r') as infile:
+                with open(self.path + '/residuals/' + str(dic_temp[z+1]) + '/' + dicstrings[z+1], 'r') as infile:
                     lines_append = infile.readlines()
                 
                 for l in range(2,len(lines_append)):
                     lines.append(lines_append[l])
         else:
-            with open(self.path + '/residuals/' + str(dic) + '/' + string, 'r') as infile:
+            with open(self.path + '/residuals/' + str(dic) + '/' + dicstrings[0], 'r') as infile:
                 lines = infile.readlines()
         
         self.filepath = str(dic)+string
@@ -498,13 +617,21 @@ class ARUPFOAM_Monitor(object):
         self.button_probes = TK.Button(self.frame, text='Probes', width=20, height=2, state='normal', bg='coral', command=self.show_probes)
         self.button_probes.place(x=self.x0+480, y=0)
         
-        self.button_temperature = TK.Button(self.frame, text='Temperature', width=9 , height=1, bg=self.btn_color, fg=self.text_color, state='disabled') 
+        self.button_temperature = TK.Button(self.frame, text='T', width=2 , height=1, bg=self.btn_color, fg=self.text_color, state='disabled') 
         self.button_temperature.place(x=self.x0+240, y=self.y0-10)
         self.button_temperature.config(command=lambda button=self.button_temperature: self.switch_patch(button))
         
-        self.button_pressure = TK.Button(self.frame, text='Pressure', width=9, height=1, bg=self.btn_color, fg=self.text_color, state='normal')
+        self.button_pressure = TK.Button(self.frame, text='p', width=2, height=1, bg=self.btn_color, fg=self.text_color, state='normal')
         self.button_pressure.config(command=lambda button=self.button_pressure: self.switch_patch(button))
-        self.button_pressure.place(x=self.x0+317, y=self.y0-10)
+        self.button_pressure.place(x=self.x0+265, y=self.y0-10)
+        
+        self.button_k = TK.Button(self.frame, text='k', width=2, height=1, bg=self.btn_color, fg=self.text_color, state='normal')
+        self.button_k.config(command=lambda button=self.button_k: self.switch_patch(button))
+        self.button_k.place(x=self.x0+290, y=self.y0-10)
+        
+        self.button_omega = TK.Button(self.frame, text='omega', width=9, height=1, bg=self.btn_color, fg=self.text_color, state='normal')
+        self.button_omega.config(command=lambda button=self.button_omega: self.switch_patch(button))
+        self.button_omega.place(x=self.x0+317, y=self.y0-10)
         
         self.button_Ux = TK.Button(self.frame, text='Ux', width=2, height=1, bg=self.btn_color, fg=self.text_color, state='normal') 
         self.button_Ux.config(command=lambda button=self.button_Ux: self.switch_patch(button))
@@ -526,7 +653,7 @@ class ARUPFOAM_Monitor(object):
         self.button_browse = TK.Button(self.frame, text='Browse Case', command=self.get_path, width=10, height=1, bg=self.btn_color, fg=self.text_color)
         self.button_browse.place(x=self.x0, y=self.y0)
         
-        self.patch_buttons = [self.button_temperature, self.button_pressure, self.button_Ux, self.button_Uy, self.button_Uz, self.button_UMag]
+        self.patch_buttons = [self.button_temperature, self.button_pressure, self.button_k, self.button_omega, self.button_Ux, self.button_Uy, self.button_Uz, self.button_UMag]
         
         TK.Button(self.frame, text='Save', command=self.save_results, width=10, height=1, bg=self.btn_color, fg=self.text_color).place(x=self.x0, y=self.y0+40)
         TK.Label(self.frame, text='Save results to ', bg=self.bg_color, fg=self.text_color).place(x=self.x0+80, y=self.y0+35)
@@ -535,6 +662,9 @@ class ARUPFOAM_Monitor(object):
         self.button_cut_outlets = TK.Button(self.frame, text='Cut Outlets', command=self.switch_cut_outlets, width=10, height=1, bg=self.btn_color, fg=self.text_color)
         self.button_cut_outlets.place(x=self.x0+394, y=self.y0-35)
         
+        self.button_show_legend = TK.Button(self.frame, text='Show Legend', command=self.switch_legend, width=10, height=1, bg=self.btn_color, fg=self.text_color)
+        self.button_show_legend.place(x=self.x0+394, y=self.y0-10)
+        
         if self.cut_outlets == True:
             self.button_cut_outlets.config(bg='green', text='Plot Outlets')
         
@@ -542,7 +672,20 @@ class ARUPFOAM_Monitor(object):
             self.refresh_chart_patches('required')
             self.frame.bind("<Button-1>", self.refresh_chart_patches)
             #self.timer_residuals.stop()
-      
+        #self.get_path()
+    
+    def switch_legend(self):
+        
+        if self.show_legend==False:
+            self.show_legend = True
+            self.button_show_legend.config(bg='green', text='Hide Legend')
+        else:
+            self.show_legend = False
+            self.button_show_legend.config(bg=self.btn_color, text='Show Legend')
+          
+        self.refresh_chart_patches('test')
+        
+    
     def switch_patch(self, button):
         
         for activate_button in self.patch_buttons:
@@ -591,6 +734,9 @@ class ARUPFOAM_Monitor(object):
         self.clear_results()
         self.get_results()
         
+        if self.show_legend==False:
+            self.ax_avg.cla()
+        
         try: 
             if len(self.AVG_Curves_T[0])<1:
                 pass
@@ -617,50 +763,73 @@ class ARUPFOAM_Monitor(object):
             pass
         else:
             self.path = path + '/postProcessing'
-            #self.path = 'U:/Jobs/267263-00_FR11/Runs/Phase2/20191210_FR11_Model_Update2_AermecChillers_Distributed_V1/postProcessing'
-            #print (self.path)
-            self.get_results()
+        #    #self.path = 'U:/Jobs/267263-00_FR11/Runs/Phase2/20191210_FR11_Model_Update2_AermecChillers_Distributed_V1/postProcessing'
+        #    #print (self.path)
+        #    self.get_results()
+        #self.path = os.getcwd() + '/postProcessing'
+        self.get_results()
+        try:
+            if len(self.AVG_Curves_T[0])<1:
+                pass
+            else:
+                self.plot_results_avg()  
+        except:
+            pass
+            
+        self.frame.bind("<Button-1>", self.refresh_chart_patches)
+        self.active_tracers = self.check_added_equations()
+        
+        
+    def read_resultType(self, line):
+        
+        offset = 0
+        ind_U  = 0
+
+        if str(self.button_temperature['state'])=='disabled':
+            self.result_string = 'T'
+            offset = 273.15
+        if str(self.button_pressure['state'])=='disabled':
+            self.result_string = 'p_rgh'
+        if str(self.button_UMag['state'])=='disabled':
+            self.result_string = 'U'
+        if str(self.button_Ux['state'])=='disabled':
+            self.result_string = 'U'
+            ind_U           = 1
+        if str(self.button_Uy['state'])=='disabled':
+            self.result_string = 'U'
+            ind_U           = 2
+        if str(self.button_Uz['state'])=='disabled':
+            self.result_string = 'U'
+            ind_U           = 3
+        if str(self.button_k['state'])=='disabled':
+            self.result_string = 'k'
+        if str(self.button_omega['state'])=='disabled':
+            self.result_string = 'omega'
+        line = line.split('\t')
+        
+        outer_break = False
+        for i, entry in enumerate(line):
+            if outer_break==True:
+                break
+            for j, char in enumerate(entry):
+                if char=='(':
+                    start = j + 1
+                if char==')':
+                    ende  = j
+                    break
             try:
-                if len(self.AVG_Curves_T[0])<1:
-                    pass
-                else:
-                    self.plot_results_avg()  
+                if entry[start:ende]==self.result_string:
+                    self.resultType = i
+                    outer_break = True
             except:
                 pass
             
-            self.frame.bind("<Button-1>", self.refresh_chart_patches)
         
-        
-        
-       
-        
-        
+            
+        return offset, ind_U
         
     def get_results(self):
-        
-        ### resultType  - 1 = Temperature, 2 = Pressure
-        offset = 0
-        ind_U  = 0
-        if str(self.button_temperature['state'])=='disabled':
-            self.resultType = 1
-            offset = 273.15
-        if str(self.button_pressure['state'])=='disabled':
-            self.resultType = -1
-        if str(self.button_UMag['state'])=='disabled':
-            self.resultType = 3
-        if str(self.button_Ux['state'])=='disabled':
-            self.resultType = 3
-            ind_U           = 1
-        if str(self.button_Uy['state'])=='disabled':
-            self.resultType = 3
-            ind_U           = 2
-        if str(self.button_Uz['state'])=='disabled':
-            self.resultType = 3
-            ind_U           = 3
-            
-            
-        
-        
+                 
         for x in os.listdir(self.path):
             self.ResultList.append(x)
         
@@ -672,116 +841,143 @@ class ARUPFOAM_Monitor(object):
         ### Get the latest reults dictionary (dic) and .dat file (string) ###
         dic_temp = []
         for y in os.listdir(self.path + '/' + self.ResultList[i]):
-            dic_temp.append(int(y))
+            dic_temp.append(int(y))                                 ### Read out every timestep folder
         
-        dic = numpy.max(dic_temp)
+        dic = numpy.max(dic_temp)  # Get max timestep
+        dic_temp.sort(key=int)     # Sort the folders
         
-        no = []
-        for h in os.listdir(self.path + '/' + self.ResultList[i] + '/' + str(dic)):
-            for q, sign in enumerate(h):
-                if '_' in sign:
-                    no.append(int(h[q+1]))
-        
-        if len(no)==1:
-            pass
-        if len(no)>1:
-            no = numpy.max(no)
-
-        if len(no)==0:
-            string = r'/surfaceFieldValue.dat' 
-            #string = r'/faceSource.dat'  
-        else:
-            string = r'/surfaceFieldValue_' + str(no)[1] + r'.dat'                    
-                
-        ### Getting results ###     
-        if len(dic_temp)>1:
-            with open(self.path + '/' + self.ResultList[i] + '/' + str(dic_temp[0]) + string, 'r') as infile:
-                lines = infile.readlines()
+        dicstrings = [] 
+        for dic in dic_temp:
+            no = []
+            ind_ende = False
+            for h in os.listdir(self.path + '/' + self.ResultList[i] + '/' + str(dic)):
+                for q, sign in enumerate(h):
+                    if '_' in sign:
+                        start = q+1
+                        ind_ende = True
+                    if '.' in sign and ind_ende==True:
+                        ende = q
+                        no.append(int(h[start:ende]))
             
-            for z in range(len(dic_temp)-1):
-                with open(self.path + '/' + self.ResultList[i] + '/' + str(dic_temp[z+1]) + string, 'r') as infile:
-                    lines_append = infile.readlines()
+           
+            if len(no)>1:
+                no = numpy.max(no)
     
-                for l in range(5,len(lines_append)):
-                    lines.append(lines_append[l])
+            if len(no)==0:
+                string = r'/surfaceFieldValue.dat' 
+            else:
+                try:
+                    string = r'/surfaceFieldValue_' + str(no[0]) + r'.dat' 
+                except:
+                    string = r'/surfaceFieldValue_' + str(no) + r'.dat' 
+                
+            dicstrings.append(string)
+                  
+                  
+        ### Reading lines from files ###     
+        if len(dic_temp)>1:
+            dic_temp.sort(key=int)
+            if self.ResultList[i]=='residuals':
+                Labels = []
+                Curves = []
+                lines  = [] 
+                 
+            else:
+                with open(self.path + '/' + self.ResultList[i] + '/' + str(dic_temp[0]) + dicstrings[0], 'r') as infile:
+                    lines = infile.readlines()
+            
+                for z in range(len(dic_temp)-1):
+                    with open(self.path + '/' + self.ResultList[i] + '/' + str(dic_temp[z+1]) + dicstrings[z+1], 'r') as infile:
+                        lines_append = infile.readlines()
+    
+                    for l in range(5,len(lines_append)):
+                        lines.append(lines_append[l])
         else:
             if self.ResultList[i]=='residuals':
                 Labels = []
                 Curves = []
+                lines  = []
                 
             else:
-                with open(self.path + '/' + self.ResultList[i] + '/' + str(dic) + string, 'r') as curve:
+               
+                with open(self.path + '/' + self.ResultList[i] + '/' + str(dic) + dicstrings[0], 'r') as curve:
                     lines = curve.readlines()
-                for k in range(5,len(lines)):    
-                    lines[k] = lines[k].split('\t')  
-                    self.times.append(int(lines[k][0]))
-                
-                for j in range(len(self.ResultList)):
-                    x = self.ResultList[j]
-                    do = True
-                    if 'avg' in x:
-                        if not 'txt' in x:
-                            do = self.check_outlet_strings(x)
-                            if do==True:                                          
-                                self.AVG_Curves_T.append([])       
-                                self.AVG_Labels.append(x)
-                                
-                                if len(dic_temp)>1:
-                                    with open(self.path + '/' + x + '/' + str(dic_temp[0]) + string, 'r') as infile:
-                                        lines = infile.readlines()
-                                    for z in range(len(dic_temp)-1):
-                                        with open(self.path + '/' + x + '/' + str(dic_temp[z+1]) + string, 'r') as infile:
-                                            lines_append = infile.readlines()
+                    
+        for k in range(5,len(lines)):    
+            lines[k] = lines[k].split('\t')  
+            self.times.append(int(lines[k][0]))
+        
+        #self.times = []
+        for j in range(len(self.ResultList)):
+            x = self.ResultList[j]
+            do = True
+            if 'avg' in x:
+                if not 'txt' in x:
+                    do = self.check_outlet_strings(x)
+                    if do==True:                                          
+                        self.AVG_Curves_T.append([])
+                        #self.times.append([])
+                        self.AVG_Labels.append(x)
                         
-                                        for l in range(5,len(lines_append)):
-                                            lines.append(lines_append[l])
-                                else:
-                                    with open(self.path + '/' + x + '/' + str(dic) + string, 'r') as curve:
-                                        lines = curve.readlines()      
+                        if len(dic_temp)>1:
+                            with open(self.path + '/' + x + '/' + str(dic_temp[0]) + dicstrings[0], 'r') as infile:
+                                lines = infile.readlines()
+                            for z in range(len(dic_temp)-1):
+                                with open(self.path + '/' + x + '/' + str(dic_temp[z+1]) + dicstrings[z+1], 'r') as infile:
+                                    lines_append = infile.readlines()
+                
+                                for l in range(5,len(lines_append)):
+                                    lines.append(lines_append[l])
+                        else:
+                            with open(self.path + '/' + x + '/' + str(dic) + dicstrings[0], 'r') as curve:
+                                lines = curve.readlines()  
                                 
-                                for k in range(5,len(lines)): 
-                                    lines[k] = lines[k].split('\t') 
-                                    if self.resultType==3:
-                                        line  = lines[k][self.resultType][1:-1].replace(' ', ',').split(',')
-                                       
-                                        if ind_U==1:
-                                            value = abs(float(line[0]))
-                                        if ind_U==2:
-                                            value = abs(float(line[1]))
-                                        if ind_U==3:
-                                            value = abs(float(line[2]))
-                                        else:
-                                            value = numpy.sqrt(float(line[0])**2+float(line[1])**2+float(line[2])**2) 
-                                       
-                                        self.AVG_Curves_T[-1].append(value)
-                                    else:
-                                        self.AVG_Curves_T[-1].append(float(lines[k][self.resultType])-offset)
-                            else:
-                                pass
+                        offset, ind_U = self.read_resultType(lines[4])
+                        
+                        for k in range(5,len(lines)): 
+                            lines[k] = lines[k].split('\t') 
+                            #self.times[-1].append(int(lines[k][0]))
+                            if self.result_string=='U':
+                                line  = lines[k][self.resultType][1:-1].replace(' ', ',').split(',')      
                             
-                    if 'max' in x:
-                        self.MAX_Curves_T.append([])       
-                        self.MAX_Labels.append(x)
-                        with open(self.path + '/' + x + '/' + str(dic) + string, 'r') as curve:
-                            lines = curve.readlines()
-                            for i in range(len(lines)):
-                                lines[i] = lines[i].split('\t')           
-                        
-                        for k in range(5,len(lines)):          
-                            self.MAX_Curves_T[-1].append(float(lines[k][self.resultType])-offset)
+                                if ind_U==1:
+                                    value = float(line[0])
+                                elif ind_U==2:
+                                    value = float(line[1])
+                                elif ind_U==3:
+                                    value = float(line[2])
+                                else:
+                                    value = numpy.sqrt(float(line[0])**2+float(line[1])**2+float(line[2])**2) 
+                               
+                                self.AVG_Curves_T[-1].append(value)
+                            else:
+                                self.AVG_Curves_T[-1].append(float(lines[k][self.resultType])-offset)
+                    else:
+                        pass
+              
+            if 'max' in x:
+                self.MAX_Curves_T.append([])       
+                self.MAX_Labels.append(x)
+                with open(self.path + '/' + x + '/' + str(dic) + string, 'r') as curve:
+                    lines = curve.readlines()
+                    for i in range(len(lines)):
+                        lines[i] = lines[i].split('\t')           
                 
-                Labels = [self.AVG_Labels, self.MAX_Labels]
-                Curves = [self.AVG_Curves_T, self.MAX_Curves_T]
-                
-                self.filepath = str(dic)+string
+                for k in range(5,len(lines)):          
+                    self.MAX_Curves_T[-1].append(float(lines[k][self.resultType])-offset)
+        
+        Labels = [self.AVG_Labels, self.MAX_Labels]
+        Curves = [self.AVG_Curves_T, self.MAX_Curves_T]
+            
+        self.filepath = str(dic)+string
         
         return Labels, Curves
         
     def save_results(self):
         '''Write Results'''
         self.xslx = Workbook()
-        sheet1 = self.xslx.add_sheet('AVG Temperatures')
-        sheet2 = self.xslx.add_sheet('MAX Temperatures')
+        sheet1 = self.xslx.add_sheet('AVG')
+        sheet2 = self.xslx.add_sheet('MAX')
         
         which_time = self.times[self.selecttime.current()]
         for p in range(len(self.times)):
@@ -806,22 +1002,42 @@ class ARUPFOAM_Monitor(object):
         
         maximum = []
         minimum = []
+        #max_time = []
+        
         for i in range(len(self.AVG_Curves_T)):
+            
+            if not len(self.times)==len(self.AVG_Curves_T[i]):
+                warning = TK.Label(self.root, text='Please check writeInterval for all patches! WriteInterval must be same for every output.', bg=self.bg_color, fg=self.text_color)
+                warning.place(x=self.x0+100, y=self.y0+280)
+                
             self.ax_avg.plot(self.times, self.AVG_Curves_T[i], label=self.AVG_Labels[i])
             maximum.append(numpy.max(self.AVG_Curves_T[i]))
             minimum.append(numpy.min(self.AVG_Curves_T[i]))
-               
+            #max_time.append(numpy.max(self.times[i]))
+            
+            
+            
+        
         self.ax_avg.grid(True)
-        #self.ax_avg.legend(loc='best')
-        if self.resultType==1:
+        if self.show_legend==True:
+            self.ax_avg.legend(loc='best')
+        if self.result_string=='T':
             self.ax_avg.set_ylabel('Temperature in C')
             self.ax_avg.axis([0,self.times[-1], int(numpy.min(minimum)-2), int(numpy.max(maximum)+2)])
-        if self.resultType==-1:
+        if self.result_string=='p_rgh':
             self.ax_avg.set_ylabel('Pressure in Pa')
             self.ax_avg.axis([0,self.times[-1], -100, 0])
-        if self.resultType==3:
+        if self.result_string=='U':
             self.ax_avg.set_ylabel('Velocity m/s')
             self.ax_avg.axis([0,self.times[-1], 0, int(numpy.max(maximum)+2)])
+        if self.result_string=='k':
+            self.ax_avg.set_ylabel('k')
+            self.ax_avg.axis([0,self.times[-1], 0, int(numpy.max(maximum)+2)])
+        if self.result_string=='omega':
+            self.ax_avg.set_ylabel('omega')
+            self.ax_avg.axis([0,self.times[-1], 0, int(numpy.max(maximum)+2)])
+        
+        
         self.ax_avg.set_xlabel('Iteration')
         self.ax_avg.set_facecolor('xkcd:charcoal')
         
